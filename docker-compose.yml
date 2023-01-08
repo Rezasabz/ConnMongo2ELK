@@ -30,9 +30,12 @@ services:
       MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
       BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
     networks:
-      - elk
+      elk:
+        ipv4_address: 192.168.55.20
     depends_on:
       - elasticsearch
+  
+
 
   elasticsearch:
     build:
@@ -56,8 +59,8 @@ services:
       # see: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
       discovery.type: single-node
     networks:
-      - elk
-    restart: unless-stopped
+      elk:
+        ipv4_address: 192.168.55.21
 
   logstash:
     build:
@@ -67,6 +70,7 @@ services:
     volumes:
       - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
       - ./logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
+      - ./logstash/jars:/usr/share/logstash/logstash-core/lib/jars
     ports:
       - 5044:5044
       - 50000:50000/tcp
@@ -76,10 +80,10 @@ services:
       LS_JAVA_OPTS: -Xms256m -Xmx256m
       LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
     networks:
-      - elk
+      elk:
+        ipv4_address: 192.168.55.22
     depends_on:
       - elasticsearch
-    restart: unless-stopped
 
   kibana:
     build:
@@ -88,19 +92,56 @@ services:
         ELASTIC_VERSION: ${ELASTIC_VERSION}
     volumes:
       - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+      - ./monogojs/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     ports:
       - 5601:5601
     environment:
       KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
     networks:
-      - elk
+      elk:
+        ipv4_address: 192.168.55.23
     depends_on:
       - elasticsearch
-    restart: unless-stopped
+
+
+  mongo:
+    image: mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: 123456
+    networks:
+      elk:
+        ipv4_address: 192.168.55.24
+    ports:
+      - "27017:27017"
+      - "28017:28017"
+    volumes:
+      - ./mongojs/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+
+  # Database Manager
+  mongo-express:
+    image: mongo-express
+    ports:
+      - 8099:8081
+    depends_on:
+      - mongo
+    environment:
+      ME_CONFIG_BASICAUTH_USERNAME: express
+      ME_CONFIG_BASICAUTH_PASSWORD: 123456
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: 123456
+    links:
+      - mongo
 
 networks:
   elk:
     driver: bridge
+    ipam:
+     config:
+       - subnet: 192.168.55.0/24
+         gateway: 192.168.55.1
+
 
 volumes:
   setup:
