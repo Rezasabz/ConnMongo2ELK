@@ -9,6 +9,7 @@ services:
   # This task is only performed during the *initial* startup of the stack. On all
   # subsequent runs, the service simply returns immediately, without performing
   # any modification to existing users.
+  
   setup:
     build:
       context: setup/
